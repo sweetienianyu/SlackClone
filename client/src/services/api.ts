@@ -97,6 +97,11 @@ export const api = {
     if (content) formData.append('content', content);
     return uploadFile<any>('/files/upload', formData);
   },
+  getFiles: (channelId: string, type?: string, uploaderId?: string) =>
+    request<any[]>(`/files?channel_id=${channelId}${type ? `&type=${type}` : ''}${uploaderId ? `&uploader_id=${uploaderId}` : ''}`),
+  searchFiles: (q: string, workspaceId: string) =>
+    request<any[]>(`/files/search?q=${encodeURIComponent(q)}&workspace_id=${workspaceId}`),
+  downloadFile: (messageId: string) => `/api/files/${messageId}/download`,
 
   // Search
   search: (q: string) => request<any[]>(`/search?q=${encodeURIComponent(q)}`),

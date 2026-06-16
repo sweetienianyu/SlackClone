@@ -5,7 +5,17 @@ import RegisterPage from './pages/RegisterPage';
 import WorkspacePage from './pages/WorkspacePage';
 
 function App() {
-  const { token } = useAuthStore();
+  const token = useAuthStore((s) => s.token);
+  const hydrated = useAuthStore((s) => (s as any)._hasHydrated);
+
+  // 等待 persist hydration 完成，避免 token 闪烁导致误跳转
+  if (!hydrated) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-gray-400">加载中...</div>
+      </div>
+    );
+  }
 
   return (
     <Routes>

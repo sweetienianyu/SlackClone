@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { api } from '../../services/api';
-import { emitTyping, emitThreadOpen, emitThreadClose } from '../../lib/socket';
+import { emitTyping, emitThreadOpen } from '../../lib/socket';
 import { formatTime, getInitial } from '../../lib/utils';
 import type { Message } from '../../types';
 
@@ -31,7 +31,7 @@ function renderContent(content: string) {
 export default function MessageArea() {
   const { currentChannel, messages } = useChannelStore();
   const { user } = useAuthStore();
-  const { openThread, closeThread } = useUIStore();
+  const { openThread } = useUIStore();
   const { currentWorkspace } = useWorkspaceStore();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -61,6 +61,12 @@ export default function MessageArea() {
 
   // 通知列表
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // 拖拽上传状态
+  const [dragOver, setDragOver] = useState(false);
+
+  // 文件预览状态
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -186,11 +192,6 @@ export default function MessageArea() {
     if (currentChannel) emitThreadOpen(msgId, currentChannel.id);
   };
 
-  const handleCloseThread = () => {
-    closeThread();
-    emitThreadClose();
-  };
-
   const handleEdit = (msg: Message) => {
     setEditingId(msg.id);
     setEditContent(msg.content);
@@ -217,14 +218,45 @@ export default function MessageArea() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentChannel) return;
-    try {
-      await api.uploadFile(currentChannel.id, file);
-    } catch (err: any) {
-      alert(err.message || '上传失败');
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentChannel) return;
+    for (let i = 0; i < files.length; i++) {
+      try {
+        await api.uploadFile(currentChannel.id, files[i]);
+      } catch (err: any) {
+        alert(err.message || '上传失败');
+      }
     }
     e.target.value = '';
+  };
+
+  // 拖拽上传处理
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!currentChannel) return;
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+      try {
+        await api.uploadFile(currentChannel.id, files[i]);
+      } catch (err: any) {
+        alert(err.message || '上传失败');
+      }
+    }
   };
 
   const handleInvite = async () => {
@@ -282,7 +314,21 @@ export default function MessageArea() {
   }, {});
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex-1 flex flex-col min-w-0 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* 拖拽上传遮罩 */}
+      {dragOver && (
+        <div className="absolute inset-0 z-50 bg-primary/5 border-2 border-dashed border-primary rounded-lg flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-4xl mb-2">📎</div>
+            <p className="text-primary font-medium">拖拽文件到此处上传</p>
+            <p className="text-xs text-gray-500 mt-1">支持 jpg/png/gif/pdf/doc/txt</p>
+          </div>
+        </div>
+      )}
       {/* 频道头部 */}
       <div className="h-14 flex items-center px-4 border-b border-gray-200 flex-shrink-0 bg-white">
         <div className="flex items-center gap-2 min-w-0">
@@ -487,25 +533,64 @@ export default function MessageArea() {
                         {isFile && msg.fileUrl && (
                           <div className="mt-1 mb-1">
                             {msg.fileType?.startsWith('image/') ? (
-                              <img
-                                src={msg.fileUrl}
-                                alt={msg.fileName || '图片'}
-                                className="max-w-sm rounded-lg border border-gray-200 cursor-pointer hover:opacity-90"
-                                onClick={() => window.open(msg.fileUrl!, '_blank')}
-                              />
+                              <div className="relative group/img inline-block">
+                                <img
+                                  src={msg.fileUrl}
+                                  alt={msg.fileName || '图片'}
+                                  className="max-w-sm max-h-64 rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => setPreviewFile({ url: msg.fileUrl!, name: msg.fileName || '图片', type: msg.fileType || 'image' })}
+                                />
+                                <a
+                                  href={api.downloadFile(msg.id)}
+                                  download
+                                  className="absolute top-2 right-2 hidden group-hover/img:flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs rounded hover:bg-black/80"
+                                >
+                                  ⬇ 下载
+                                </a>
+                              </div>
+                            ) : msg.fileType === 'application/pdf' ? (
+                              <div className="border border-gray-200 rounded-lg overflow-hidden max-w-sm">
+                                <iframe
+                                  src={msg.fileUrl}
+                                  className="w-full h-48"
+                                  title={msg.fileName || 'PDF'}
+                                />
+                                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-200">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-red-500 text-lg">📄</span>
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-gray-800 truncate">{msg.fileName || 'PDF'}</div>
+                                      {msg.fileSize && <div className="text-xs text-gray-400">{(msg.fileSize / 1024).toFixed(1)} KB</div>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => setPreviewFile({ url: msg.fileUrl!, name: msg.fileName || 'PDF', type: msg.fileType || 'application/pdf' })}
+                                      className="text-xs text-primary hover:underline px-2 py-1"
+                                    >预览</button>
+                                    <a
+                                      href={api.downloadFile(msg.id)}
+                                      download
+                                      className="text-xs text-primary hover:underline px-2 py-1"
+                                    >下载</a>
+                                  </div>
+                                </div>
+                              </div>
                             ) : (
-                              <a
-                                href={msg.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-                              >
-                                <span className="text-lg">📎</span>
-                                <div>
-                                  <div className="text-sm font-medium text-gray-800">{msg.fileName || '文件'}</div>
+                              <div className="inline-flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors max-w-sm">
+                                <span className="text-2xl">
+                                  {msg.fileType?.startsWith('text/') ? '📝' : '📎'}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-800 truncate">{msg.fileName || '文件'}</div>
                                   {msg.fileSize && <div className="text-xs text-gray-400">{(msg.fileSize / 1024).toFixed(1)} KB</div>}
                                 </div>
-                              </a>
+                                <a
+                                  href={api.downloadFile(msg.id)}
+                                  download
+                                  className="text-xs text-primary hover:underline px-2 py-1 flex-shrink-0"
+                                >下载</a>
+                              </div>
                             )}
                           </div>
                         )}
@@ -528,10 +613,6 @@ export default function MessageArea() {
                         {msg.reactions.map((r, i) => {
                           const userIds: string[] = r.userIds || [];
                           const reactedByMe = userIds.includes(user?.id || '');
-                          const getUserDisplay = (uid: string) => {
-                            const member = wsMembers.find((m: any) => m.userId === uid);
-                            return member?.user?.displayName || uid.slice(0, 6);
-                          };
                           return (
                             <div key={i} className="relative group/reaction">
                               <button
@@ -674,7 +755,7 @@ export default function MessageArea() {
           />
           <div className="flex items-center justify-between px-3 py-1.5 border-t border-gray-100">
             <div className="flex items-center gap-2">
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} />
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.txt,.csv" multiple />
               <button onClick={() => fileInputRef.current?.click()} className="text-gray-400 hover:text-gray-600 text-sm" title="上传文件">📎</button>
               <button
                 onClick={() => { setEmojiPickerTarget({ msgId: '', type: 'input' }); setShowEmojiPicker(!showEmojiPicker); }}
@@ -697,6 +778,33 @@ export default function MessageArea() {
           </div>
         </div>
       </div>
+
+      {/* 文件预览弹窗 */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center" onClick={() => setPreviewFile(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white text-sm font-medium truncate">{previewFile.name}</span>
+              <button onClick={() => setPreviewFile(null)} className="text-white/70 hover:text-white text-xl ml-4">✕</button>
+            </div>
+            {previewFile.type.startsWith('image/') ? (
+              <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-[80vh] mx-auto rounded-lg" />
+            ) : previewFile.type === 'application/pdf' ? (
+              <iframe src={previewFile.url} className="w-full h-[80vh] bg-white rounded-lg" title={previewFile.name} />
+            ) : (
+              <div className="bg-white rounded-lg p-8 text-center">
+                <div className="text-4xl mb-4">📎</div>
+                <p className="text-gray-600 mb-4">此文件类型不支持在线预览</p>
+                <a
+                  href={previewFile.url}
+                  download={previewFile.name}
+                  className="text-primary hover:underline"
+                >下载文件</a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
