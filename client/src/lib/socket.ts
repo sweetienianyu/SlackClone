@@ -95,6 +95,22 @@ export function connectSocket() {
     }
   });
 
+  // 线程新回复 - 实时追加到已打开的线程面板
+  socket.on('thread:reply', (data) => {
+    console.log('[Thread] New reply for message:', data.parentId);
+    // 通过自定义事件通知 ThreadPanel 刷新
+    window.dispatchEvent(new CustomEvent('thread:new-reply', { detail: data }));
+    // 同时更新主消息列表中父消息的回复计数
+    const { messages, setMessages } = useChannelStore.getState();
+    setMessages(
+      messages.map((m) =>
+        m.id === data.parentId
+          ? { ...m, _count: { ...((m as any)._count || {}), replies: (((m as any)._count?.replies || 0) + 1) } }
+          : m
+      )
+    );
+  });
+
   return socket;
 }
 

@@ -72,6 +72,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     if (io) {
       io.to(channelId).emit('message:new', formattedMessage);
 
+      // 如果是线程回复，额外广播线程事件
+      if (parentId) {
+        io.to(channelId).emit('thread:reply', { parentId, reply: formattedMessage });
+      }
+
       // 解析 @提及 并通知被提及的用户
       const mentionRegex = /@(\w+)/g;
       let match;

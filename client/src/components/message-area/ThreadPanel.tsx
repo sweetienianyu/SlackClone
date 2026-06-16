@@ -28,6 +28,17 @@ export default function ThreadPanel() {
     if (threadParentId) loadReplies();
   }, [threadParentId]);
 
+  // 监听线程新回复事件，实时追加
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail.parentId === threadParentId) {
+        setReplies((prev) => [...prev, e.detail.reply]);
+      }
+    };
+    window.addEventListener('thread:new-reply', handler as EventListener);
+    return () => window.removeEventListener('thread:new-reply', handler as EventListener);
+  }, [threadParentId]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [replies]);
