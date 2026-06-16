@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  username    String   @unique
+  displayName String
+  password    String
+  avatarUrl   String?
+  status      String   @default("online") // online, away, busy, offline
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+  channelMembers   ChannelMember[]
+  messages         Message[]
+  reactions        Reaction[]
+  ownedWorkspaces  Workspace[]  @relation("WorkspaceOwner")
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  iconUrl   String?
+  inviteCode String? @unique
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members WorkspaceMember[]
+  channels Channel[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String
+  role        String   @default("member") // admin, member
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@map("workspace_members")
+}
+
+model Channel {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  type        String   @default("public") // public, private, dm
+  topic       String?
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ChannelMember[]
+  messages  Message[]
+
+  @@unique([workspaceId, name])
+  @@map("channels")
+}
+
+model ChannelMember {
+  id         String    @id @default(uuid())
+  channelId  String
+  userId     String
+  role       String    @default("member")
+  lastReadAt DateTime?
+  muted      Boolean   @default(false)
+  joinedAt   DateTime  @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([channelId, userId])
+  @@map("channel_members")
+}
+
+model Message {
+  id        String    @id @default(uuid())
+  channelId String
+  userId    String
+  content   String
+  parentId  String?
+  type      String    @default("text") // text, file, system
+  fileUrl   String?
+  fileName  String?
+  fileSize  Int?
+  fileType  String?
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  channel  Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id])
+  parent   Message?   @relation("MessageReplies", fields: [parentId], references: [id])
+  replies  Message[]  @relation("MessageReplies")
+  reactions Reaction[]
+
+  @@map("messages")
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+  @@map("reactions")
+}
