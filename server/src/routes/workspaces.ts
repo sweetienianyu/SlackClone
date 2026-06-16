@@ -5,12 +5,13 @@ import { AuthRequest } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// 获取用户的工作区列表
+// 获取用户的工作区列表（按最近加入排序）
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const memberships = await prisma.workspaceMember.findMany({
       where: { userId: req.userId! },
       include: { workspace: true },
+      orderBy: { joinedAt: 'desc' },
     });
     res.json(memberships.map((m) => m.workspace));
   } catch (err: any) {

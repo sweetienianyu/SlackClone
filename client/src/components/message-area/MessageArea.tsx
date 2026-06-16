@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { api } from '../../services/api';
-import { emitTyping } from '../../lib/socket';
+import { emitTyping, emitThreadOpen, emitThreadClose } from '../../lib/socket';
 import { formatTime, getInitial } from '../../lib/utils';
 import type { Message } from '../../types';
 
@@ -31,7 +31,7 @@ function renderContent(content: string) {
 export default function MessageArea() {
   const { currentChannel, messages } = useChannelStore();
   const { user } = useAuthStore();
-  const { openThread } = useUIStore();
+  const { openThread, closeThread } = useUIStore();
   const { currentWorkspace } = useWorkspaceStore();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -179,6 +179,16 @@ export default function MessageArea() {
     } catch (err) {
       console.error('添加反应失败:', err);
     }
+  };
+
+  const handleOpenThread = (msgId: string) => {
+    openThread(msgId);
+    if (currentChannel) emitThreadOpen(msgId, currentChannel.id);
+  };
+
+  const handleCloseThread = () => {
+    closeThread();
+    emitThreadClose();
   };
 
   const handleEdit = (msg: Message) => {
@@ -565,7 +575,7 @@ export default function MessageArea() {
                     {/* 线程回复数 */}
                     {(msg as any)._count?.replies > 0 && (
                       <button
-                        onClick={() => openThread(msg.id)}
+                        onClick={() => handleOpenThread(msg.id)}
                         className="mt-1 text-xs text-info hover:underline flex items-center gap-1"
                       >
                         💬 {(msg as any)._count.replies} 条回复
@@ -576,7 +586,7 @@ export default function MessageArea() {
                     {!isEditing && (
                       <div className="hidden group-hover:flex items-center gap-1 mt-1">
                         <button
-                          onClick={() => openThread(msg.id)}
+                          onClick={() => handleOpenThread(msg.id)}
                           className="px-2 py-0.5 text-xs bg-white border border-gray-200 rounded hover:bg-gray-50 shadow-sm"
                         >
                           💬 回复

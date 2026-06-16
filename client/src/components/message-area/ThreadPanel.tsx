@@ -4,11 +4,17 @@ import { useChannelStore } from '../../stores/channelStore';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import { formatTime, getInitial } from '../../lib/utils';
+import { emitThreadClose } from '../../lib/socket';
 
 const AVATAR_COLORS = ['#611f69', '#1264a3', '#0f7840', '#da2e38', '#ecb22e', '#e01e5a'];
 
 export default function ThreadPanel() {
   const { threadPanelOpen, threadParentId, closeThread } = useUIStore();
+
+  const handleClose = () => {
+    closeThread();
+    emitThreadClose();
+  };
   const { messages } = useChannelStore();
   const { user } = useAuthStore();
   const [replies, setReplies] = useState<any[]>([]);
@@ -61,7 +67,7 @@ export default function ThreadPanel() {
       {/* 头部 */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200 flex-shrink-0">
         <h3 className="font-bold text-sm">线程</h3>
-        <button onClick={closeThread} className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100">✕</button>
+        <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100">✕</button>
       </div>
 
       {/* 原始消息 */}

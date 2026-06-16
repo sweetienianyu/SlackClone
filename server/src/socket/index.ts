@@ -28,6 +28,9 @@ export function setupSocketIO(httpServer: any) {
     const user = socket.data.user;
     console.log(`[Socket] ${user.displayName} connected (${socket.id})`);
 
+    // 加入用户个人房间（用于 @提及通知等定向推送）
+    socket.join(user.id);
+
     // 更新用户状态为在线
     prisma.user.update({
       where: { id: user.id },
@@ -53,6 +56,15 @@ export function setupSocketIO(httpServer: any) {
         isTyping,
         username: user.displayName,
       });
+    });
+
+    // 线程打开/关闭 - 广播给同频道其他用户
+    socket.on('thread:open', ({ messageId, channelId }: { messageId: string; channelId: string }) => {
+      socket.to(channelId).emit('thread:open', { messageId, fromUser: { id: user.id, displayName: user.displayName } });
+    });
+
+    socket.on('thread:close', () => {
+      socket.broadcast.emit('thread:close');
     });
 
     // 断开连接
