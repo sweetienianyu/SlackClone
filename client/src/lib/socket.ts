@@ -65,16 +65,42 @@ export function connectSocket() {
   // @提及通知
   socket.on('notification:mention', (data) => {
     console.log('[Notification] You were mentioned:', data);
-    // 浏览器通知
+    // 浏览器桌面通知
     if (Notification.permission === 'granted') {
-      new Notification(`@${data.fromUser} 在 #${data.channelName} 提到了你`, {
+      const n = new Notification(`@${data.fromUser} 在 #${data.channelName} 提到了你`, {
         body: data.content,
+        tag: `mention-${data.messageId}`,
       });
+      n.onclick = () => {
+        window.focus();
+        const { channels, setCurrentChannel } = useChannelStore.getState();
+        const ch = channels.find((c) => c.id === data.channelId);
+        if (ch) setCurrentChannel(ch);
+        n.close();
+      };
     }
-    // 同时更新通知列表（通过 uiStore 或 channelStore）
-    const { currentChannel } = useChannelStore.getState();
-    if (currentChannel && data.channelId === currentChannel.id) {
-      // 当前频道被@时，可以高亮或标记
+    // 增加未读计数
+    const { currentChannel, unreadCounts, setUnreadCount } = useChannelStore.getState();
+    if (!currentChannel || currentChannel.id !== data.channelId) {
+      setUnreadCount(data.channelId, (unreadCounts[data.channelId] || 0) + 1);
+    }
+  });
+
+  // 桌面通知（按通知偏好推送的普通消息）
+  socket.on('notification:desktop', (data) => {
+    console.log('[Desktop Notification]', data);
+    if (Notification.permission === 'granted') {
+      const n = new Notification(data.title, {
+        body: data.body,
+        tag: `msg-${data.messageId}`,
+      });
+      n.onclick = () => {
+        window.focus();
+        const { channels, setCurrentChannel } = useChannelStore.getState();
+        const ch = channels.find((c) => c.id === data.channelId);
+        if (ch) setCurrentChannel(ch);
+        n.close();
+      };
     }
   });
 

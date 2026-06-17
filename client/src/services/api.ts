@@ -94,6 +94,23 @@ export const api = {
   deleteChannelGroup: (id: string) =>
     request<any>(`/channels/groups/${id}`, { method: 'DELETE' }),
 
+  // Channel notification preferences & mute
+  updateNotifyPreference: (channelId: string, preference: 'all' | 'mentions' | 'none') =>
+    request<any>(`/channels/${channelId}/notification-preference`, { method: 'PUT', body: JSON.stringify({ preference }) }),
+  muteChannel: (channelId: string, duration: '1h' | 'until_tomorrow' | 'off') =>
+    request<any>(`/channels/${channelId}/mute`, { method: 'POST', body: JSON.stringify({ duration }) }),
+
+  // Documents
+  getDocuments: (workspaceId: string, channelId?: string) =>
+    request<any[]>(`/documents?workspace_id=${workspaceId}${channelId ? `&channel_id=${channelId}` : ''}`),
+  getDocument: (id: string) => request<any>(`/documents/${id}`),
+  createDocument: (data: { workspaceId: string; title: string; content?: string; template?: string; channelId?: string }) =>
+    request<any>('/documents', { method: 'POST', body: JSON.stringify(data) }),
+  updateDocument: (id: string, data: { title?: string; content?: string }) =>
+    request<any>(`/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDocument: (id: string) =>
+    request<any>(`/documents/${id}`, { method: 'DELETE' }),
+
   // Messages
   getMessages: (channelId: string, cursor?: string) =>
     request<any[]>(`/messages?channel_id=${channelId}${cursor ? `&cursor=${cursor}` : ''}`),
@@ -122,5 +139,24 @@ export const api = {
   downloadFile: (messageId: string) => `/api/files/${messageId}/download`,
 
   // Search
-  search: (q: string) => request<any[]>(`/search?q=${encodeURIComponent(q)}`),
+  search: (params: {
+    q: string;
+    workspaceId?: string;
+    channelId?: string;
+    userId?: string;
+    type?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams({ q: params.q });
+    if (params.workspaceId) query.set('workspace_id', params.workspaceId);
+    if (params.channelId) query.set('channel_id', params.channelId);
+    if (params.userId) query.set('user_id', params.userId);
+    if (params.type) query.set('type', params.type);
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.limit) query.set('limit', String(params.limit));
+    return request<any[]>(`/search?${query.toString()}`);
+  },
 };

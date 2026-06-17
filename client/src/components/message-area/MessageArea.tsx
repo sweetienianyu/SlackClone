@@ -17,7 +17,25 @@ const EMOJI_LIST = [
   '📎', '📌', '🎯', '💬', '🏆', '🌟', '☕', '🍕',
 ];
 
-function renderContent(content: string) {
+function renderContent(content: string, onDocClick?: (docId: string) => void) {
+  // 文档卡片: "📄 文档卡片: [标题] (doc:xxx)"
+  const docMatch = content.match(/📄 文档卡片: \[(.+?)\] \(doc:(.+?)\)/);
+  if (docMatch) {
+    const [, title, docId] = docMatch;
+    return (
+      <button
+        onClick={() => onDocClick?.(docId)}
+        className="inline-flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors text-left"
+      >
+        <span className="text-xl">📄</span>
+        <div>
+          <div className="text-sm font-medium text-purple-700">{title}</div>
+          <div className="text-xs text-purple-400">点击查看协作文档</div>
+        </div>
+      </button>
+    );
+  }
+
   const parts = content.split(/(@\w+)/g);
   return parts.map((part, i) =>
     part.startsWith('@') ? (
@@ -31,7 +49,7 @@ function renderContent(content: string) {
 export default function MessageArea() {
   const { currentChannel, messages } = useChannelStore();
   const { user } = useAuthStore();
-  const { openThread } = useUIStore();
+  const { openThread, openDocumentModal } = useUIStore();
   const { currentWorkspace } = useWorkspaceStore();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -609,7 +627,7 @@ export default function MessageArea() {
 
                         {/* 文本内容 */}
                         <div className="text-sm text-gray-800 break-words whitespace-pre-wrap">
-                          {renderContent(msg.content)}
+                          {renderContent(msg.content, (docId) => openDocumentModal(docId))}
                         </div>
 
                         {/* 已编辑标记 */}

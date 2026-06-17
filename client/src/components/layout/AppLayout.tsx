@@ -4,6 +4,7 @@ import ChannelList from '../channel-list/ChannelList';
 import MessageArea from '../message-area/MessageArea';
 import ThreadPanel from '../message-area/ThreadPanel';
 import SearchModal from '../search/SearchModal';
+import DocumentModal from '../document/DocumentModal';
 import { useUIStore } from '../../stores/uiStore';
 
 export default function AppLayout() {
@@ -52,6 +53,9 @@ export default function AppLayout() {
 
       {/* 搜索弹窗 */}
       <SearchModal />
+
+      {/* 文档弹窗 */}
+      <DocumentModal />
     </div>
   );
 }

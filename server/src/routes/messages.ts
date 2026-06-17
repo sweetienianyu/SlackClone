@@ -77,7 +77,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         io.to(channelId).emit('thread:reply', { parentId, reply: formattedMessage });
       }
 
-      // 解析 @提及 并通知被提及的用户
+      // 解析 @提及
       const mentionRegex = /@(\w+)/g;
       let match;
       const mentionedUsernames = new Set<string>();
@@ -85,25 +85,53 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         mentionedUsernames.add(match[1]);
       }
 
-      if (mentionedUsernames.size > 0) {
-        const mentionedUsers = await prisma.user.findMany({
-          where: { username: { in: Array.from(mentionedUsernames) } },
-          select: { id: true },
-        });
+      const mentionedUsers = mentionedUsernames.size > 0
+        ? await prisma.user.findMany({ where: { username: { in: Array.from(mentionedUsernames) } }, select: { id: true } })
+        : [];
 
-        const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+      const mentionedUserIds = new Set(mentionedUsers.map((u) => u.id));
+      const channel = await prisma.channel.findUnique({ where: { id: channelId } });
 
-        for (const mu of mentionedUsers) {
-          if (mu.id !== req.userId) {
-            io.to(mu.id).emit('notification:mention', {
-              messageId: message.id,
-              channelId,
-              channelName: channel?.name,
-              fromUser: message.user?.displayName,
-              content: content.slice(0, 100),
-              createdAt: message.createdAt,
-            });
-          }
+      // 获取频道所有成员的通知偏好，按偏好推送桌面通知
+      const members = await prisma.channelMember.findMany({
+        where: { channelId, userId: { not: req.userId! } },
+        select: { userId: true, notifyPreference: true, muted: true, mutedUntil: true },
+      });
+
+      const now = new Date();
+      for (const m of members) {
+        const isMuted = m.muted && (!m.mutedUntil || new Date(m.mutedUntil) > now);
+        const isMentioned = mentionedUserIds.has(m.userId);
+
+        // 判断是否需要推送桌面通知
+        let shouldNotify = false;
+        if (!isMuted) {
+          if (m.notifyPreference === 'all') shouldNotify = true;
+          else if (m.notifyPreference === 'mentions' && isMentioned) shouldNotify = true;
+        }
+
+        // @提及 总是推送 mention 事件（即使静音，前端可自行处理）
+        if (isMentioned) {
+          io.to(m.userId).emit('notification:mention', {
+            messageId: message.id,
+            channelId,
+            channelName: channel?.name,
+            fromUser: message.user?.displayName,
+            content: content.slice(0, 100),
+            createdAt: message.createdAt,
+          });
+        }
+
+        // 桌面通知（非静音 + 符合偏好）
+        if (shouldNotify) {
+          io.to(m.userId).emit('notification:desktop', {
+            title: `#${channel?.name || '频道'}`,
+            body: isMentioned
+              ? `${message.user?.displayName} @提到了你: ${content.slice(0, 80)}`
+              : `${message.user?.displayName}: ${content.slice(0, 80)}`,
+            channelId,
+            messageId: message.id,
+          });
         }
       }
     }

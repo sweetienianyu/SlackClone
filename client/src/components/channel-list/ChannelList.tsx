@@ -9,7 +9,7 @@ import type { Channel, ChannelGroup } from '../../types';
 export default function ChannelList() {
   const { currentWorkspace } = useWorkspaceStore();
   const { channels, currentChannel, setChannels, setCurrentChannel, addChannel, unreadCounts } = useChannelStore();
-  const { toggleSidebar, openSearch } = useUIStore();
+  const { toggleSidebar, openSearch, openDocumentModal } = useUIStore();
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelType, setNewChannelType] = useState<'public' | 'private'>('public');
@@ -223,6 +223,24 @@ export default function ChannelList() {
     } catch (err: any) { alert(err.message || '移动失败'); }
   };
 
+  const handleUpdateNotifyPref = async (pref: string) => {
+    if (!currentChannel) return;
+    try {
+      await api.updateNotifyPreference(currentChannel.id, pref as any);
+      loadChannels();
+      handleOpenDetail(currentChannel);
+    } catch (err: any) { alert(err.message || '设置失败'); }
+  };
+
+  const handleMute = async (duration: string) => {
+    if (!currentChannel) return;
+    try {
+      await api.muteChannel(currentChannel.id, duration as any);
+      loadChannels();
+      handleOpenDetail(currentChannel);
+    } catch (err: any) { alert(err.message || '操作失败'); }
+  };
+
   // 分类频道
   const pinnedChannels = channels.filter((c) => (c as any).pinned && c.type !== 'dm');
   const dmChannels = channels.filter((c) => c.type === 'dm');
@@ -247,6 +265,7 @@ export default function ChannelList() {
   const renderChannelItem = (ch: Channel, icon: string) => {
     const unread = unreadCounts[ch.id] || 0;
     const isPinned = (ch as any).pinned;
+    const isMuted = (ch as any).muted;
     return (
       <div key={ch.id} className="group/ch relative">
         <button
@@ -256,10 +275,16 @@ export default function ChannelList() {
           }`}
         >
           {isPinned && <span className="text-[10px] text-yellow-500">📌</span>}
+          {isMuted && <span className="text-[10px] opacity-60">🔕</span>}
           <span className={currentChannel?.id === ch.id ? 'text-white/70' : 'text-gray-400'}>{icon}</span>
-          <span className="truncate flex-1">{ch.name}</span>
-          {unread > 0 && (
+          <span className={`truncate flex-1 ${isMuted ? 'opacity-60' : ''}`}>{ch.name}</span>
+          {unread > 0 && !isMuted && (
             <span className="bg-red-500 text-white text-[10px] rounded-full px-1.5 min-w-[18px] text-center flex-shrink-0">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
+          {unread > 0 && isMuted && (
+            <span className="bg-gray-400 text-white text-[10px] rounded-full px-1.5 min-w-[18px] text-center flex-shrink-0">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
@@ -292,6 +317,9 @@ export default function ChannelList() {
         </div>
         <button onClick={openSearch} className="mt-2 w-full px-3 py-1.5 bg-gray-100 rounded text-sm text-gray-500 text-left hover:bg-gray-200 transition-colors">
           🔍 搜索
+        </button>
+        <button onClick={() => openDocumentModal()} className="mt-1 w-full px-3 py-1.5 bg-gray-100 rounded text-sm text-gray-500 text-left hover:bg-gray-200 transition-colors">
+          📄 文档
         </button>
       </div>
 
@@ -532,6 +560,44 @@ export default function ChannelList() {
               ))}
               {showPinned && pinnedMessages.length === 0 && (
                 <p className="text-xs text-gray-400 text-center py-2">暂无置顶消息</p>
+              )}
+            </div>
+
+            {/* 通知偏好 */}
+            <div className="mb-4">
+              <span className="text-xs font-semibold text-gray-500 uppercase block mb-1">通知偏好</span>
+              <div className="flex gap-1">
+                {(['all', 'mentions', 'none'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => handleUpdateNotifyPref(p)}
+                    className={`flex-1 py-1.5 text-xs rounded border transition-colors ${
+                      (channelDetail.notifyPreference || 'all') === p
+                        ? 'border-primary bg-purple-50 text-primary'
+                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {p === 'all' ? '全部消息' : p === 'mentions' ? '仅@提及' : '关闭'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 频道静音 */}
+            <div className="mb-4">
+              <span className="text-xs font-semibold text-gray-500 uppercase block mb-1">频道静音</span>
+              {channelDetail.muted ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 flex-1">
+                    已静音{channelDetail.mutedUntil ? ` 至 ${new Date(channelDetail.mutedUntil).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                  </span>
+                  <button onClick={() => handleMute('off')} className="text-xs text-primary hover:underline">取消静音</button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <button onClick={() => handleMute('1h')} className="flex-1 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">静音 1 小时</button>
+                  <button onClick={() => handleMute('until_tomorrow')} className="flex-1 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">直到明天</button>
+                </div>
               )}
             </div>
 

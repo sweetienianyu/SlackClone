@@ -11,6 +11,7 @@ import channelRoutes from './routes/channels';
 import messageRoutes from './routes/messages';
 import searchRoutes from './routes/search';
 import fileRoutes from './routes/files';
+import documentRoutes from './routes/documents';
 import { authMiddleware } from './middleware/auth';
 
 const app = express();
@@ -40,6 +41,7 @@ app.use('/api/channels', authMiddleware, channelRoutes);
 app.use('/api/messages', authMiddleware, messageRoutes);
 app.use('/api/search', authMiddleware, searchRoutes);
 app.use('/api/files', authMiddleware, fileRoutes);
+app.use('/api/documents', authMiddleware, documentRoutes);
 
 // WebSocket
 const io = setupSocketIO(server);

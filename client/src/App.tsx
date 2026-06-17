@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -7,6 +8,13 @@ import WorkspacePage from './pages/WorkspacePage';
 function App() {
   const token = useAuthStore((s) => s.token);
   const hydrated = useAuthStore((s) => (s as any)._hasHydrated);
+
+  // 登录后请求桌面通知权限
+  useEffect(() => {
+    if (token && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, [token]);
 
   // 等待 persist hydration 完成，避免 token 闪烁导致误跳转
   if (!hydrated) {

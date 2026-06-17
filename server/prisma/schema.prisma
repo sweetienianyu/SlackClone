@@ -23,6 +23,7 @@ model User {
   messages         Message[]
   reactions        Reaction[]
   ownedWorkspaces  Workspace[]  @relation("WorkspaceOwner")
+  documents        Document[]
 }
 
 model Workspace {
@@ -38,6 +39,7 @@ model Workspace {
   members WorkspaceMember[]
   channels Channel[]
   channelGroups ChannelGroup[]
+  documents Document[]
 
   @@map("workspaces")
 }
@@ -73,6 +75,7 @@ model Channel {
   members   ChannelMember[]
   messages  Message[]
   pinnedMessages PinnedMessage[]
+  documents Document[]
 
   @@unique([workspaceId, name])
   @@map("channels")
@@ -93,14 +96,16 @@ model ChannelGroup {
 }
 
 model ChannelMember {
-  id         String    @id @default(uuid())
-  channelId  String
-  userId     String
-  role       String    @default("member")
-  lastReadAt DateTime?
-  muted      Boolean   @default(false)
-  pinned     Boolean   @default(false)
-  joinedAt   DateTime  @default(now())
+  id              String    @id @default(uuid())
+  channelId       String
+  userId          String
+  role            String    @default("member")
+  lastReadAt      DateTime?
+  muted           Boolean   @default(false)
+  mutedUntil      DateTime?
+  notifyPreference String   @default("all") // all, mentions, none
+  pinned          Boolean   @default(false)
+  joinedAt        DateTime  @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id])
@@ -160,4 +165,22 @@ model Reaction {
 
   @@unique([messageId, userId, emoji])
   @@map("reactions")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  workspaceId String
+  channelId   String?
+  title       String
+  content     String   @default("")
+  template    String   @default("blank") // blank, meeting, plan, retro
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel   Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  @@map("documents")
 }

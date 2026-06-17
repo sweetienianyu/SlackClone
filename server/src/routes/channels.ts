@@ -30,20 +30,27 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    // 获取当前用户的置顶频道
+    // 获取当前用户的置顶频道、通知偏好、静音状态
     const myMemberships = await prisma.channelMember.findMany({
       where: { userId: req.userId!, channel: { workspaceId } },
-      select: { channelId: true, pinned: true },
+      select: { channelId: true, pinned: true, notifyPreference: true, muted: true, mutedUntil: true },
     });
-    const pinnedMap = new Map(myMemberships.map((m) => [m.channelId, m.pinned]));
+    const memberMap = new Map(myMemberships.map((m) => [m.channelId, m]));
 
-    const result = channels.map((ch) => ({
-      ...ch,
-      displayName: ch.type === 'dm' && ch.members.length > 0
-        ? ch.members[0].user?.displayName || ch.members[0].user?.username || ch.name
-        : ch.name,
-      pinned: pinnedMap.get(ch.id) || false,
-    }));
+    const result = channels.map((ch) => {
+      const m = memberMap.get(ch.id);
+      const isMuted = m?.muted && (!m.mutedUntil || new Date(m.mutedUntil) > new Date());
+      return {
+        ...ch,
+        displayName: ch.type === 'dm' && ch.members.length > 0
+          ? ch.members[0].user?.displayName || ch.members[0].user?.username || ch.name
+          : ch.name,
+        pinned: m?.pinned || false,
+        notifyPreference: m?.notifyPreference || 'all',
+        muted: isMuted || false,
+        mutedUntil: m?.mutedUntil || null,
+      };
+    });
 
     res.json(result);
   } catch (err: any) {
@@ -375,6 +382,58 @@ router.delete('/groups/:id', async (req: AuthRequest, res: Response) => {
     });
     await prisma.channelGroup.delete({ where: { id: req.params.id } });
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 通知偏好设置（all / mentions / none）
+router.put('/:id/notification-preference', async (req: AuthRequest, res: Response) => {
+  try {
+    const { preference } = req.body;
+    if (!['all', 'mentions', 'none'].includes(preference)) {
+      return res.status(400).json({ error: 'preference 必须为 all/mentions/none' });
+    }
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+
+    const updated = await prisma.channelMember.update({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+      data: { notifyPreference: preference },
+    });
+    res.json({ notifyPreference: updated.notifyPreference });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 频道静音（1小时 / 直到明天 / 取消静音）
+router.post('/:id/mute', async (req: AuthRequest, res: Response) => {
+  try {
+    const { duration } = req.body; // '1h' | 'until_tomorrow' | 'off'
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+
+    let mutedUntil: Date | null = null;
+    const now = new Date();
+    if (duration === '1h') {
+      mutedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+    } else if (duration === 'until_tomorrow') {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(8, 0, 0, 0); // 明天早 8 点
+      mutedUntil = tomorrow;
+    }
+
+    const updated = await prisma.channelMember.update({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+      data: { muted: duration !== 'off', mutedUntil },
+    });
+    res.json({ muted: updated.muted, mutedUntil: updated.mutedUntil });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

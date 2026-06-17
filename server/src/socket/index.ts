@@ -70,6 +70,26 @@ export function setupSocketIO(httpServer: any) {
       socket.broadcast.emit('thread:close');
     });
 
+    // 文档协作 - 加入/离开文档房间
+    socket.on('document:join', (docId: string) => {
+      socket.join(`doc:${docId}`);
+      socket.to(`doc:${docId}`).emit('document:user-joined', { userId: user.id, displayName: user.displayName });
+    });
+
+    socket.on('document:leave', (docId: string) => {
+      socket.leave(`doc:${docId}`);
+      socket.to(`doc:${docId}`).emit('document:user-left', { userId: user.id });
+    });
+
+    // 文档实时编辑（增量同步，简化版：广播光标和内容变更）
+    socket.on('document:cursor', ({ docId, position }: { docId: string; position: number }) => {
+      socket.to(`doc:${docId}`).emit('document:cursor', { userId: user.id, displayName: user.displayName, position });
+    });
+
+    socket.on('document:edit', ({ docId, content, title }: { docId: string; content?: string; title?: string }) => {
+      socket.to(`doc:${docId}`).emit('document:edit', { content, title, fromUser: { id: user.id, displayName: user.displayName } });
+    });
+
     // 断开连接
     socket.on('disconnect', () => {
       console.log(`[Socket] ${user.displayName} disconnected`);
