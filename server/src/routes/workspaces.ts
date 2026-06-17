@@ -139,7 +139,7 @@ router.get('/:id/members', async (req: AuthRequest, res: Response) => {
   try {
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: req.params.id },
-      include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true, status: true } } },
+      include: { user: { select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, status: true } } },
     });
     res.json(members);
   } catch (err: any) {

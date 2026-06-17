@@ -4,3 +4,7 @@ server/node_modules
 .env.test
 .env.development
 docs/*
+
+# 数据库文件 - 不要上传git
+*.db
+*.db-journal

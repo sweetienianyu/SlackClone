@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 export function setupSocketIO(httpServer: any) {
   const io = new Server(httpServer, {
-    cors: { origin: 'http://localhost:5173', credentials: true },
+    cors: { origin: ['http://localhost:5173', 'http://localhost:5174'], credentials: true },
   });
 
   // 认证中间件
@@ -36,6 +36,9 @@ export function setupSocketIO(httpServer: any) {
       where: { id: user.id },
       data: { status: 'online' },
     }).catch(console.error);
+
+    // 广播用户上线状态
+    io.emit('user:status', { userId: user.id, status: 'online' });
 
     // 加入频道房间
     socket.on('channel:join', (channelId: string) => {
@@ -74,6 +77,8 @@ export function setupSocketIO(httpServer: any) {
         where: { id: user.id },
         data: { status: 'offline' },
       }).catch(console.error);
+      // 广播用户离线状态
+      io.emit('user:status', { userId: user.id, status: 'offline' });
     });
   });
 

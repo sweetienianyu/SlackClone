@@ -360,6 +360,18 @@ export default function MessageArea() {
             )}
           </button>
           <button className="text-gray-400 hover:text-gray-600 p-1.5 rounded hover:bg-gray-100" title="固定消息">📌</button>
+          <button
+            onClick={async () => {
+              if (!currentChannel) return;
+              try {
+                const detail = await api.getChannel(currentChannel.id);
+                // 打开频道详情 — 通过 CustomEvent 通知 ChannelList
+                window.dispatchEvent(new CustomEvent('channel:open-detail', { detail: currentChannel }));
+              } catch {}
+            }}
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded hover:bg-gray-100"
+            title="频道详情"
+          >ℹ️</button>
         </div>
       </div>
 
@@ -677,6 +689,14 @@ export default function MessageArea() {
                           className="px-2 py-0.5 text-xs bg-white border border-gray-200 rounded hover:bg-gray-50 shadow-sm"
                         >😊</button>
                         <button onClick={() => handleReaction(msg.id, '👍')} className="px-2 py-0.5 text-xs bg-white border border-gray-200 rounded hover:bg-gray-50 shadow-sm">👍</button>
+                        <button
+                          onClick={async () => {
+                            if (!currentChannel) return;
+                            try { await api.pinMessage(currentChannel.id, msg.id); } catch (err: any) { alert(err.message || '操作失败'); }
+                          }}
+                          className="px-2 py-0.5 text-xs bg-white border border-gray-200 rounded hover:bg-gray-50 shadow-sm"
+                          title="置顶消息"
+                        >📌</button>
                         {isOwn && (
                           <>
                             <button onClick={() => handleEdit(msg)} className="px-2 py-0.5 text-xs bg-white border border-gray-200 rounded hover:bg-gray-50 shadow-sm">✏️</button>

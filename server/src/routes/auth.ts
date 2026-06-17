@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { generateToken } from '../config/jwt';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -71,19 +71,9 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // 获取当前用户
-router.get('/me', async (req: any, res: Response) => {
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未认证' });
-    }
-    const { verifyToken } = await import('../config/jwt');
-    const payload = verifyToken(authHeader.slice(7));
-    if (!payload) {
-      return res.status(401).json({ error: '令牌无效' });
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    const user = await prisma.user.findUnique({ where: { id: req.userId! } });
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
@@ -95,7 +85,7 @@ router.get('/me', async (req: any, res: Response) => {
 });
 
 // 更新个人资料
-router.put('/profile', async (req: AuthRequest, res: Response) => {
+router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { displayName, username, status, avatarUrl } = req.body;
 

@@ -66,15 +66,33 @@ export const api = {
   // Channels
   getChannels: (workspaceId: string) =>
     request<any[]>(`/channels?workspace_id=${workspaceId}`),
-  createChannel: (data: { workspaceId: string; name: string; type: string; topic?: string }) =>
+  createChannel: (data: { workspaceId: string; name: string; type: string; topic?: string; groupId?: string }) =>
     request<any>('/channels', { method: 'POST', body: JSON.stringify(data) }),
   getChannel: (id: string) => request<any>(`/channels/${id}`),
+  updateChannel: (id: string, data: { name?: string; topic?: string; description?: string; groupId?: string }) =>
+    request<any>(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   joinChannel: (id: string) => request<any>(`/channels/${id}/join`, { method: 'POST' }),
+  leaveChannel: (id: string) => request<any>(`/channels/${id}/leave`, { method: 'POST' }),
+  pinChannel: (id: string) => request<{ pinned: boolean }>(`/channels/${id}/pin`, { method: 'POST' }),
+  pinMessage: (channelId: string, messageId: string) =>
+    request<{ pinned: boolean }>(`/channels/${channelId}/pin-message`, { method: 'POST', body: JSON.stringify({ messageId }) }),
+  getPinnedMessages: (channelId: string) =>
+    request<any[]>(`/channels/${channelId}/pinned`),
   createDm: (workspaceId: string, targetUserId: string) =>
     request<any>('/channels/dm', { method: 'POST', body: JSON.stringify({ workspaceId, targetUserId }) }),
   getChannelMembers: (id: string) => request<any[]>(`/channels/${id}/members`),
   inviteToChannel: (id: string, userId: string) =>
     request<any>(`/channels/${id}/invite`, { method: 'POST', body: JSON.stringify({ userId }) }),
+
+  // Channel Groups
+  getChannelGroups: (workspaceId: string) =>
+    request<any[]>(`/channels/groups/list?workspace_id=${workspaceId}`),
+  createChannelGroup: (data: { workspaceId: string; name: string; sort?: number }) =>
+    request<any>('/channels/groups', { method: 'POST', body: JSON.stringify(data) }),
+  updateChannelGroup: (id: string, data: { name?: string; sort?: number }) =>
+    request<any>(`/channels/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteChannelGroup: (id: string) =>
+    request<any>(`/channels/groups/${id}`, { method: 'DELETE' }),
 
   // Messages
   getMessages: (channelId: string, cursor?: string) =>

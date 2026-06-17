@@ -20,7 +20,7 @@ export const useChannelStore = create<ChannelState>((set) => ({
   messages: [],
   unreadCounts: {},
   setChannels: (channels) => set({ channels }),
-  setCurrentChannel: (channel) => set({ currentChannel: channel, messages: [] }),
+  setCurrentChannel: (channel) => set((s) => ({ currentChannel: channel, messages: [], unreadCounts: { ...s.unreadCounts, [channel.id]: 0 } })),
   addChannel: (channel) => set((s) => ({ channels: [...s.channels, channel] })),
   setMessages: (messages) => set({ messages }),
   addMessage: (message) => set((s) => ({ messages: [...s.messages, message] })),

@@ -28,9 +28,13 @@ export function connectSocket() {
   });
 
   socket.on('message:new', (message) => {
-    const { currentChannel } = useChannelStore.getState();
+    const { currentChannel, addMessage, setUnreadCount, unreadCounts } = useChannelStore.getState();
     if (message.channelId === currentChannel?.id) {
-      useChannelStore.getState().addMessage(message);
+      addMessage(message);
+    } else {
+      // 不在当前频道，增加未读计数
+      const current = unreadCounts[message.channelId] || 0;
+      setUnreadCount(message.channelId, current + 1);
     }
   });
 
@@ -46,6 +50,12 @@ export function connectSocket() {
 
   socket.on('user:typing', ({ userId, channelId, isTyping }) => {
     console.log(`[Typing] ${userId} in ${channelId}: ${isTyping}`);
+  });
+
+  // 用户在线状态变化
+  socket.on('user:status', ({ userId, status }) => {
+    console.log(`[Status] ${userId} is now ${status}`);
+    window.dispatchEvent(new CustomEvent('user:status-change', { detail: { userId, status } }));
   });
 
   socket.on('unread:update', ({ channelId, count }) => {

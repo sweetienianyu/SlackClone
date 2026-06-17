@@ -37,6 +37,7 @@ model Workspace {
   owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
   members WorkspaceMember[]
   channels Channel[]
+  channelGroups ChannelGroup[]
 
   @@map("workspaces")
 }
@@ -62,16 +63,33 @@ model Channel {
   type        String   @default("public") // public, private, dm
   topic       String?
   description String?
+  groupId     String?
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  group     ChannelGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   members   ChannelMember[]
   messages  Message[]
+  pinnedMessages PinnedMessage[]
 
   @@unique([workspaceId, name])
   @@map("channels")
+}
+
+model ChannelGroup {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channels  Channel[]
+
+  @@map("channel_groups")
 }
 
 model ChannelMember {
@@ -81,6 +99,7 @@ model ChannelMember {
   role       String    @default("member")
   lastReadAt DateTime?
   muted      Boolean   @default(false)
+  pinned     Boolean   @default(false)
   joinedAt   DateTime  @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -88,6 +107,20 @@ model ChannelMember {
 
   @@unique([channelId, userId])
   @@map("channel_members")
+}
+
+model PinnedMessage {
+  id        String   @id @default(uuid())
+  channelId String
+  messageId String
+  pinnedBy  String
+  createdAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, messageId])
+  @@map("pinned_messages")
 }
 
 model Message {
@@ -110,6 +143,7 @@ model Message {
   parent   Message?   @relation("MessageReplies", fields: [parentId], references: [id])
   replies  Message[]  @relation("MessageReplies")
   reactions Reaction[]
+  pinnedIn PinnedMessage[]
 
   @@map("messages")
 }

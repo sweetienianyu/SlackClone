@@ -5,13 +5,12 @@ import { AuthRequest } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// 获取频道列表
+// 获取频道列表（含分组、置顶信息）
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const workspaceId = req.query.workspace_id as string;
     if (!workspaceId) return res.status(400).json({ error: 'workspace_id 必填' });
 
-    // 获取用户在该工作区的频道
     const channels = await prisma.channel.findMany({
       where: {
         workspaceId,
@@ -26,16 +25,24 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           where: { userId: { not: req.userId! } },
           include: { user: { select: { id: true, displayName: true, username: true, avatarUrl: true, status: true } } },
         },
+        group: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
 
-    // 为 DM 频道添加 displayName
+    // 获取当前用户的置顶频道
+    const myMemberships = await prisma.channelMember.findMany({
+      where: { userId: req.userId!, channel: { workspaceId } },
+      select: { channelId: true, pinned: true },
+    });
+    const pinnedMap = new Map(myMemberships.map((m) => [m.channelId, m.pinned]));
+
     const result = channels.map((ch) => ({
       ...ch,
       displayName: ch.type === 'dm' && ch.members.length > 0
         ? ch.members[0].user?.displayName || ch.members[0].user?.username || ch.name
         : ch.name,
+      pinned: pinnedMap.get(ch.id) || false,
     }));
 
     res.json(result);
@@ -47,7 +54,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 // 创建频道
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { workspaceId, name, type = 'public', topic } = req.body;
+    const { workspaceId, name, type = 'public', topic, groupId } = req.body;
     if (!workspaceId || !name) return res.status(400).json({ error: 'workspaceId 和 name 必填' });
 
     const existing = await prisma.channel.findUnique({
@@ -61,6 +68,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         name: name.toLowerCase().replace(/\s+/g, '-'),
         type,
         topic,
+        groupId: groupId || null,
         createdBy: req.userId!,
         members: { create: { userId: req.userId!, role: 'admin' } },
       },
@@ -71,10 +79,52 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// 获取频道详情
+// 更新频道信息（topic, description, name, groupId）
+router.put('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, topic, description, groupId } = req.body;
+    const channel = await prisma.channel.findUnique({ where: { id: req.params.id } });
+    if (!channel) return res.status(404).json({ error: '频道不存在' });
+
+    // 检查是否是频道管理员或工作区管理员
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member || (member.role !== 'admin')) {
+      return res.status(403).json({ error: '仅频道管理员可编辑' });
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name ? { name: name.toLowerCase().replace(/\s+/g, '-') } : {}),
+        ...(topic !== undefined ? { topic } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(groupId !== undefined ? { groupId: groupId || null } : {}),
+      },
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取频道详情（含成员、置顶消息）
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const channel = await prisma.channel.findUnique({ where: { id: req.params.id } });
+    const channel = await prisma.channel.findUnique({
+      where: { id: req.params.id },
+      include: {
+        members: {
+          include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true, status: true } } },
+        },
+        group: { select: { id: true, name: true } },
+        pinnedMessages: {
+          include: { message: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
     if (!channel) return res.status(404).json({ error: '频道不存在' });
     res.json(channel);
   } catch (err: any) {
@@ -103,13 +153,91 @@ router.post('/:id/join', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// 离开频道
+router.post('/:id/leave', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+    await prisma.channelMember.delete({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 置顶/取消置顶频道
+router.post('/:id/pin', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+
+    // 检查置顶数量上限
+    if (!member.pinned) {
+      const pinnedCount = await prisma.channelMember.count({
+        where: { userId: req.userId!, pinned: true, channel: { workspaceId: (await prisma.channel.findUnique({ where: { id: req.params.id } }))!.workspaceId } },
+      });
+      if (pinnedCount >= 10) return res.status(400).json({ error: '最多置顶 10 个频道' });
+    }
+
+    const updated = await prisma.channelMember.update({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+      data: { pinned: !member.pinned },
+    });
+    res.json({ pinned: updated.pinned });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 置顶消息
+router.post('/:id/pin-message', async (req: AuthRequest, res: Response) => {
+  try {
+    const { messageId } = req.body;
+    if (!messageId) return res.status(400).json({ error: 'messageId 必填' });
+
+    const existing = await prisma.pinnedMessage.findUnique({
+      where: { channelId_messageId: { channelId: req.params.id, messageId } },
+    });
+    if (existing) {
+      await prisma.pinnedMessage.delete({ where: { id: existing.id } });
+      res.json({ pinned: false });
+    } else {
+      await prisma.pinnedMessage.create({
+        data: { channelId: req.params.id, messageId, pinnedBy: req.userId! },
+      });
+      res.json({ pinned: true });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取频道置顶消息
+router.get('/:id/pinned', async (req: AuthRequest, res: Response) => {
+  try {
+    const pinned = await prisma.pinnedMessage.findMany({
+      where: { channelId: req.params.id },
+      include: { message: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(pinned);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 创建或获取 DM 频道
 router.post('/dm', async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId, targetUserId } = req.body;
     if (!workspaceId || !targetUserId) return res.status(400).json({ error: 'workspaceId 和 targetUserId 必填' });
 
-    // 查找已有的 DM 频道
     const existingDm = await prisma.channel.findFirst({
       where: {
         workspaceId,
@@ -123,7 +251,6 @@ router.post('/dm', async (req: AuthRequest, res: Response) => {
       return res.json(existingDm);
     }
 
-    // 创建新 DM 频道
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser) return res.status(404).json({ error: '目标用户不存在' });
 
@@ -185,6 +312,69 @@ router.get('/:id/members', async (req: AuthRequest, res: Response) => {
       include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true, status: true } } },
     });
     res.json(members);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ 频道分组 ============
+
+// 获取工作区分组列表
+router.get('/groups/list', async (req: AuthRequest, res: Response) => {
+  try {
+    const workspaceId = req.query.workspace_id as string;
+    if (!workspaceId) return res.status(400).json({ error: 'workspace_id 必填' });
+
+    const groups = await prisma.channelGroup.findMany({
+      where: { workspaceId },
+      include: { channels: { select: { id: true, name: true } } },
+      orderBy: { sort: 'asc' },
+    });
+    res.json(groups);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 创建分组
+router.post('/groups', async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, name, sort } = req.body;
+    if (!workspaceId || !name) return res.status(400).json({ error: 'workspaceId 和 name 必填' });
+
+    const group = await prisma.channelGroup.create({
+      data: { workspaceId, name, sort: sort || 0 },
+    });
+    res.status(201).json(group);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 更新分组
+router.put('/groups/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, sort } = req.body;
+    const group = await prisma.channelGroup.update({
+      where: { id: req.params.id },
+      data: { ...(name ? { name } : {}), ...(sort !== undefined ? { sort } : {}) },
+    });
+    res.json(group);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 删除分组
+router.delete('/groups/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    // 将分组下的频道 groupId 设为 null
+    await prisma.channel.updateMany({
+      where: { groupId: req.params.id },
+      data: { groupId: null },
+    });
+    await prisma.channelGroup.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

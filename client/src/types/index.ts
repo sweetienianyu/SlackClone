@@ -23,7 +23,28 @@ export interface Channel {
   type: 'public' | 'private' | 'dm';
   topic: string | null;
   description: string | null;
+  groupId: string | null;
+  group?: { id: string; name: string } | null;
+  pinned: boolean;
   createdBy: string;
+  createdAt: string;
+}
+
+export interface ChannelGroup {
+  id: string;
+  workspaceId: string;
+  name: string;
+  sort: number;
+  channels?: { id: string; name: string }[];
+  createdAt: string;
+}
+
+export interface PinnedMessage {
+  id: string;
+  channelId: string;
+  messageId: string;
+  pinnedBy: string;
+  message: Message;
   createdAt: string;
 }
 
