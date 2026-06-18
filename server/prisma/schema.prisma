@@ -105,6 +105,7 @@ model ChannelMember {
   mutedUntil      DateTime?
   notifyPreference String   @default("all") // all, mentions, none
   pinned          Boolean   @default(false)
+  favorited       Boolean   @default(false)
   joinedAt        DateTime  @default(now())
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)

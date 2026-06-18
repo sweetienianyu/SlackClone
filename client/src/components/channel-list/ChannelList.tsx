@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useChannelStore } from '../../stores/channelStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import { joinChannel } from '../../lib/socket';
 import type { Channel, ChannelGroup } from '../../types';
 
 export default function ChannelList() {
   const { currentWorkspace } = useWorkspaceStore();
-  const { channels, currentChannel, setChannels, setCurrentChannel, addChannel, unreadCounts } = useChannelStore();
+  const { channels, currentChannel, setChannels, setCurrentChannel, addChannel, unreadCounts, loadUnreadCounts } = useChannelStore();
   const { toggleSidebar, openSearch, openDocumentModal } = useUIStore();
+  const { user } = useAuthStore();
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelType, setNewChannelType] = useState<'public' | 'private'>('public');
@@ -17,6 +19,10 @@ export default function ChannelList() {
   const [newChannelGroup, setNewChannelGroup] = useState('');
   const [showNewDm, setShowNewDm] = useState(false);
   const [dmTargetEmail, setDmTargetEmail] = useState('');
+  const [showGroupDm, setShowGroupDm] = useState(false);
+  const [groupDmName, setGroupDmName] = useState('');
+  const [groupDmSelected, setGroupDmSelected] = useState<string[]>([]);
+  const [wsMembersData, setWsMembersData] = useState<any[]>([]);
   const [userStatuses, setUserStatuses] = useState<Record<string, string>>({});
   const [groups, setGroups] = useState<ChannelGroup[]>([]);
   const [showNewGroup, setShowNewGroup] = useState(false);
@@ -81,6 +87,8 @@ export default function ChannelList() {
     try {
       const data = await api.getChannels(currentWorkspace.id);
       setChannels(data);
+      // 加载未读计数
+      loadUnreadCounts(currentWorkspace.id);
       if (data.length > 0) {
         selectChannel(data[0]);
       } else {
@@ -144,6 +152,33 @@ export default function ChannelList() {
     }
   };
 
+  const handleCreateGroupDm = async () => {
+    if (!currentWorkspace || groupDmSelected.length === 0) return;
+    try {
+      const ch = await api.createGroupDM({
+        workspaceId: currentWorkspace.id,
+        targetUserIds: groupDmSelected,
+        name: groupDmName.trim() || undefined,
+      });
+      if (!channels.find((c) => c.id === ch.id)) addChannel(ch);
+      selectChannel(ch);
+      setShowGroupDm(false);
+      setGroupDmName('');
+      setGroupDmSelected([]);
+    } catch (err: any) {
+      alert(err.message || '创建群组私信失败');
+    }
+  };
+
+  const openGroupDm = async () => {
+    if (!currentWorkspace) return;
+    try {
+      const data = await api.getWorkspaceMembers(currentWorkspace.id);
+      setWsMembersData(data);
+    } catch { /* ignore */ }
+    setShowGroupDm(true);
+  };
+
   const handleCreateGroup = async () => {
     if (!newGroupName.trim() || !currentWorkspace) return;
     try {
@@ -170,6 +205,15 @@ export default function ChannelList() {
   const handlePinChannel = async (ch: Channel) => {
     try {
       await api.pinChannel(ch.id);
+      loadChannels();
+    } catch (err: any) {
+      alert(err.message || '操作失败');
+    }
+  };
+
+  const handleFavoriteChannel = async (ch: Channel) => {
+    try {
+      await api.favoriteChannel(ch.id);
       loadChannels();
     } catch (err: any) {
       alert(err.message || '操作失败');
@@ -266,6 +310,7 @@ export default function ChannelList() {
     const unread = unreadCounts[ch.id] || 0;
     const isPinned = (ch as any).pinned;
     const isMuted = (ch as any).muted;
+    const isFavorited = (ch as any).favorited;
     return (
       <div key={ch.id} className="group/ch relative">
         <button
@@ -275,6 +320,7 @@ export default function ChannelList() {
           }`}
         >
           {isPinned && <span className="text-[10px] text-yellow-500">📌</span>}
+          {isFavorited && <span className="text-[10px] text-yellow-400">⭐</span>}
           {isMuted && <span className="text-[10px] opacity-60">🔕</span>}
           <span className={currentChannel?.id === ch.id ? 'text-white/70' : 'text-gray-400'}>{icon}</span>
           <span className={`truncate flex-1 ${isMuted ? 'opacity-60' : ''}`}>{ch.name}</span>
@@ -293,6 +339,9 @@ export default function ChannelList() {
         <div className="hidden group-hover/sh:flex absolute right-1 top-1/2 -translate-y-1/2 items-center gap-0.5 bg-white rounded shadow-sm border border-gray-200 z-10">
           <button onClick={(e) => { e.stopPropagation(); handlePinChannel(ch); }} className="px-1 py-0.5 text-xs hover:bg-gray-100 rounded" title={isPinned ? '取消置顶' : '置顶'}>
             📌
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); handleFavoriteChannel(ch); }} className="px-1 py-0.5 text-xs hover:bg-gray-100 rounded" title={isFavorited ? '取消收藏' : '收藏'}>
+            ⭐
           </button>
           <button onClick={(e) => { e.stopPropagation(); handleOpenDetail(ch); }} className="px-1 py-0.5 text-xs hover:bg-gray-100 rounded" title="详情">
             ℹ️
@@ -380,7 +429,10 @@ export default function ChannelList() {
         <div className="mb-3">
           <div className="flex items-center justify-between px-2 py-1">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">私信</span>
-            <button onClick={() => setShowNewDm(true)} className="text-gray-400 hover:text-gray-600 text-sm">+</button>
+            <div className="flex items-center gap-1">
+              <button onClick={openGroupDm} className="text-gray-400 hover:text-gray-600 text-sm" title="群组私信">👥</button>
+              <button onClick={() => setShowNewDm(true)} className="text-gray-400 hover:text-gray-600 text-sm">+</button>
+            </div>
           </div>
           {dmChannels.map((ch) => {
             const dmName = (ch as any).displayName || ch.name.replace(/^dm-[^-]+-/, '');
@@ -445,6 +497,37 @@ export default function ChannelList() {
             <div className="flex gap-2">
               <button onClick={() => { setShowNewDm(false); setDmTargetEmail(''); }} className="flex-1 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">取消</button>
               <button onClick={handleCreateDm} className="flex-1 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-light">发起</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 群组私信弹窗 */}
+      {showGroupDm && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+            <h3 className="font-bold text-lg mb-4">发起群组私信</h3>
+            <input type="text" value={groupDmName} onChange={(e) => setGroupDmName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-info mb-3" placeholder="群组名称（可选）" autoFocus />
+            <div className="max-h-48 overflow-y-auto mb-4 border border-gray-200 rounded">
+              {wsMembersData.filter((m: any) => m.user?.id !== user?.id).map((m: any) => (
+                <label key={m.userId} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={groupDmSelected.includes(m.user.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setGroupDmSelected([...groupDmSelected, m.user.id]);
+                      else setGroupDmSelected(groupDmSelected.filter((id) => id !== m.user.id));
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-sm">{m.user?.displayName || m.user?.username}</span>
+                  <span className="text-xs text-gray-400">{m.user?.email}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowGroupDm(false); setGroupDmName(''); setGroupDmSelected([]); }} className="flex-1 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">取消</button>
+              <button onClick={handleCreateGroupDm} disabled={groupDmSelected.length === 0} className="flex-1 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-light disabled:opacity-50">创建 ({groupDmSelected.length})</button>
             </div>
           </div>
         </div>
@@ -604,10 +687,13 @@ export default function ChannelList() {
             {/* 操作按钮 */}
             <div className="flex gap-2 mt-4">
               <button onClick={() => { handlePinChannel(currentChannel!); setShowDetail(false); }} className="flex-1 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
-                {(currentChannel as any)?.pinned ? '取消置顶' : '📌 置顶频道'}
+                {(currentChannel as any)?.pinned ? '取消置顶' : '📌 置顶'}
+              </button>
+              <button onClick={() => { handleFavoriteChannel(currentChannel!); setShowDetail(false); }} className="flex-1 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
+                {(currentChannel as any)?.favorited ? '取消收藏' : '⭐ 收藏'}
               </button>
               <button onClick={() => { handleLeaveChannel(currentChannel!); setShowDetail(false); }} className="flex-1 py-2 border border-red-300 text-red-500 rounded-md text-sm hover:bg-red-50">
-                离开频道
+                离开
               </button>
             </div>
           </div>

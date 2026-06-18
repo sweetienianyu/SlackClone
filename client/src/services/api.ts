@@ -100,6 +100,20 @@ export const api = {
   muteChannel: (channelId: string, duration: '1h' | 'until_tomorrow' | 'off') =>
     request<any>(`/channels/${channelId}/mute`, { method: 'POST', body: JSON.stringify({ duration }) }),
 
+  // Unread counts & mark as read
+  getUnreadCounts: (workspaceId: string) =>
+    request<Record<string, number>>(`/channels/unread/count?workspace_id=${workspaceId}`),
+  markChannelRead: (channelId: string) =>
+    request<any>(`/channels/${channelId}/read`, { method: 'POST' }),
+
+  // Channel favorite
+  favoriteChannel: (channelId: string) =>
+    request<{ favorited: boolean }>(`/channels/${channelId}/favorite`, { method: 'POST' }),
+
+  // Group DM
+  createGroupDM: (data: { workspaceId: string; targetUserIds: string[]; name?: string }) =>
+    request<any>('/channels/dm/group', { method: 'POST', body: JSON.stringify(data) }),
+
   // Documents
   getDocuments: (workspaceId: string, channelId?: string) =>
     request<any[]>(`/documents?workspace_id=${workspaceId}${channelId ? `&channel_id=${channelId}` : ''}`),

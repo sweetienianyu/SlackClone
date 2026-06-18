@@ -30,10 +30,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    // 获取当前用户的置顶频道、通知偏好、静音状态
+    // 获取当前用户的置顶频道、通知偏好、静音状态、收藏
     const myMemberships = await prisma.channelMember.findMany({
       where: { userId: req.userId!, channel: { workspaceId } },
-      select: { channelId: true, pinned: true, notifyPreference: true, muted: true, mutedUntil: true },
+      select: { channelId: true, pinned: true, notifyPreference: true, muted: true, mutedUntil: true, favorited: true },
     });
     const memberMap = new Map(myMemberships.map((m) => [m.channelId, m]));
 
@@ -46,6 +46,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           ? ch.members[0].user?.displayName || ch.members[0].user?.username || ch.name
           : ch.name,
         pinned: m?.pinned || false,
+        favorited: m?.favorited || false,
         notifyPreference: m?.notifyPreference || 'all',
         muted: isMuted || false,
         mutedUntil: m?.mutedUntil || null,
@@ -434,6 +435,111 @@ router.post('/:id/mute', async (req: AuthRequest, res: Response) => {
       data: { muted: duration !== 'off', mutedUntil },
     });
     res.json({ muted: updated.muted, mutedUntil: updated.mutedUntil });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 获取未读消息计数（基于 lastReadAt）
+router.get('/unread/count', async (req: AuthRequest, res: Response) => {
+  try {
+    const workspaceId = req.query.workspace_id as string;
+    if (!workspaceId) return res.status(400).json({ error: 'workspace_id 必填' });
+
+    const memberships = await prisma.channelMember.findMany({
+      where: { userId: req.userId!, channel: { workspaceId } },
+      select: { channelId: true, lastReadAt: true },
+    });
+
+    const result: Record<string, number> = {};
+    for (const m of memberships) {
+      const count = await prisma.message.count({
+        where: {
+          channelId: m.channelId,
+          userId: { not: req.userId! },
+          ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
+        },
+      });
+      if (count > 0) result[m.channelId] = count;
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 标记频道为已读（更新 lastReadAt）
+router.post('/:id/read', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+
+    await prisma.channelMember.update({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+      data: { lastReadAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 收藏/取消收藏频道
+router.post('/:id/favorite', async (req: AuthRequest, res: Response) => {
+  try {
+    const member = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+    });
+    if (!member) return res.status(404).json({ error: '不在该频道' });
+
+    const updated = await prisma.channelMember.update({
+      where: { channelId_userId: { channelId: req.params.id, userId: req.userId! } },
+      data: { favorited: !member.favorited },
+    });
+    res.json({ favorited: updated.favorited });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 创建群组私信（支持多用户）
+router.post('/dm/group', async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, targetUserIds, name } = req.body;
+    if (!workspaceId || !targetUserIds || !Array.isArray(targetUserIds) || targetUserIds.length === 0) {
+      return res.status(400).json({ error: 'workspaceId 和 targetUserIds[] 必填' });
+    }
+
+    const allUserIds = Array.from(new Set([req.userId!, ...targetUserIds]));
+
+    // 查找已有的群组私信（成员完全匹配）
+    const existingChannels = await prisma.channel.findMany({
+      where: { workspaceId, type: 'dm' },
+      include: { members: { select: { userId: true } } },
+    });
+    const existing = existingChannels.find((ch) => {
+      const memberIds = ch.members.map((m) => m.userId).sort();
+      return memberIds.length === allUserIds.length &&
+        memberIds.every((id, i) => id === allUserIds.sort()[i]);
+    });
+    if (existing) return res.json(existing);
+
+    const groupName = name || allUserIds.map(id => id.slice(0, 4)).join('-');
+    const dmChannel = await prisma.channel.create({
+      data: {
+        workspaceId,
+        name: groupName,
+        type: 'dm',
+        createdBy: req.userId!,
+        members: {
+          create: allUserIds.map((uid) => ({ userId: uid, role: 'member' })),
+        },
+      },
+      include: { members: { include: { user: { select: { id: true, displayName: true, avatarUrl: true, status: true } } } } },
+    });
+    res.status(201).json(dmChannel);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

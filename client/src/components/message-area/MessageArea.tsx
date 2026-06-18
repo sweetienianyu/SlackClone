@@ -56,8 +56,15 @@ export default function MessageArea() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 虚拟滚动：限制渲染数量 + 向上加载
+  const VISIBLE_LIMIT = 100;
+  const [renderCount, setRenderCount] = useState(VISIBLE_LIMIT);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const prevScrollHeight = useRef(0);
 
   // 顶部导航面板状态
   const [showMemberPanel, setShowMemberPanel] = useState(false);
@@ -87,8 +94,42 @@ export default function MessageArea() {
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 新消息时滚动到底部（仅当用户已在底部附近时）
+    const container = messagesContainerRef.current;
+    if (container) {
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+      if (isNearBottom || messages.length <= VISIBLE_LIMIT) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // 切换频道时重置渲染数量
+  useEffect(() => {
+    setRenderCount(VISIBLE_LIMIT);
+  }, [currentChannel?.id]);
+
+  // 向上滚动加载更多消息
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    if (container.scrollTop < 50 && messages.length > renderCount && !loadingMore) {
+      setLoadingMore(true);
+      prevScrollHeight.current = container.scrollHeight;
+      setRenderCount((prev) => Math.min(prev + VISIBLE_LIMIT, messages.length));
+    }
+  };
+
+  // 加载更多后保持滚动位置
+  useEffect(() => {
+    if (loadingMore && messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = newScrollHeight - prevScrollHeight.current;
+      setLoadingMore(false);
+    }
+  }, [renderCount, loadingMore]);
 
   // 组件挂载时立即加载工作区成员（@提及和点赞用户列表都需要）
   useEffect(() => {
@@ -323,8 +364,11 @@ export default function MessageArea() {
     (m: any) => m.user && (m.user.username?.toLowerCase().includes(mentionQuery.toLowerCase()) || m.user.displayName?.toLowerCase().includes(mentionQuery.toLowerCase()))
   );
 
+  // 虚拟滚动：只渲染最近 renderCount 条消息
+  const visibleMessages = messages.slice(-renderCount);
+
   // 按日期分组消息
-  const groupedMessages = messages.reduce<Record<string, Message[]>>((acc, msg) => {
+  const groupedMessages = visibleMessages.reduce<Record<string, Message[]>>((acc, msg) => {
     const date = new Date(msg.createdAt).toLocaleDateString('zh-CN');
     if (!acc[date]) acc[date] = [];
     acc[date].push(msg);
@@ -497,8 +541,16 @@ export default function MessageArea() {
         </div>
       )}
 
-      {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto px-5 py-4" onClick={() => { setShowMemberPanel(false); setShowNotifPanel(false); }}>
+      {/* 消息列表 - 虚拟滚动优化 */}
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-5 py-4"
+        onClick={() => { setShowMemberPanel(false); setShowNotifPanel(false); }}
+      >
+        {loadingMore && (
+          <div className="text-center text-xs text-gray-400 py-2">加载更多消息...</div>
+        )}
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date}>
             <div className="flex items-center my-4">
