@@ -7,8 +7,9 @@ import AppLayout from '../components/layout/AppLayout';
 
 export default function WorkspacePage() {
   const { workspaces, currentWorkspace, setWorkspaces, setCurrentWorkspace, addWorkspace } = useWorkspaceStore();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [wsName, setWsName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [joinError, setJoinError] = useState('');
@@ -20,13 +21,15 @@ export default function WorkspacePage() {
 
   const loadWorkspaces = async () => {
     try {
+      setLoadError('');
       const data = await api.getWorkspaces();
       setWorkspaces(data);
       if (data.length > 0 && !currentWorkspace) {
         setCurrentWorkspace(data[0]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('加载工作区失败:', err);
+      setLoadError(err.message || '加载工作区失败');
     } finally {
       setLoading(false);
     }
@@ -113,6 +116,29 @@ export default function WorkspacePage() {
               className="w-full py-2 border border-white/30 text-white rounded-md text-sm hover:bg-white/10 transition-colors"
             >
               加入工作区
+            </button>
+          </div>
+
+          {/* 错误提示与操作 */}
+          {loadError && (
+            <div className="mt-4 bg-red-500/20 border border-red-400/30 rounded-lg p-4">
+              <p className="text-red-200 text-sm mb-3">{loadError}</p>
+              <button
+                onClick={loadWorkspaces}
+                className="w-full py-2 bg-white/10 text-white rounded-md text-sm hover:bg-white/20 transition-colors mb-2"
+              >
+                重新加载
+              </button>
+            </div>
+          )}
+
+          {/* 退出登录 */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={logout}
+              className="text-white/50 hover:text-white text-sm transition-colors"
+            >
+              退出登录 ({user?.email})
             </button>
           </div>
         </div>

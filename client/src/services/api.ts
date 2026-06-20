@@ -13,6 +13,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
   });
 
+  if (res.status === 401) {
+    useAuthStore.getState().logout();
+    window.location.href = '/login';
+    throw new Error('登录已过期，请重新登录');
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || '请求失败');
@@ -30,6 +36,12 @@ async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
     },
     body: formData,
   });
+
+  if (res.status === 401) {
+    useAuthStore.getState().logout();
+    window.location.href = '/login';
+    throw new Error('登录已过期，请重新登录');
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

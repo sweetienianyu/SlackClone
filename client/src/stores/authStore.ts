@@ -13,6 +13,16 @@ interface AuthState {
   setHasHydrated: (v: boolean) => void;
 }
 
+function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -29,6 +39,11 @@ export const useAuthStore = create<AuthState>()(
       name: 'slackclone-auth',
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
+        if (state && isTokenExpired(state.token)) {
+          state.token = null;
+          state.refreshToken = null;
+          state.user = null;
+        }
         state?.setHasHydrated(true);
       },
     },
