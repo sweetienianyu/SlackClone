@@ -7,6 +7,7 @@ interface UIState {
   searchOpen: boolean;
   documentModalOpen: boolean;
   documentId: string | null;
+  adminPanelOpen: boolean;
   toggleSidebar: () => void;
   openThread: (parentId: string) => void;
   closeThread: () => void;
@@ -14,6 +15,8 @@ interface UIState {
   closeSearch: () => void;
   openDocumentModal: (docId?: string | null) => void;
   closeDocumentModal: () => void;
+  openAdminPanel: () => void;
+  closeAdminPanel: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -23,6 +26,7 @@ export const useUIStore = create<UIState>((set) => ({
   searchOpen: false,
   documentModalOpen: false,
   documentId: null,
+  adminPanelOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   openThread: (parentId) => set({ threadPanelOpen: true, threadParentId: parentId }),
   closeThread: () => set({ threadPanelOpen: false, threadParentId: null }),
@@ -30,4 +34,6 @@ export const useUIStore = create<UIState>((set) => ({
   closeSearch: () => set({ searchOpen: false }),
   openDocumentModal: (docId) => set({ documentModalOpen: true, documentId: docId || null }),
   closeDocumentModal: () => set({ documentModalOpen: false, documentId: null }),
+  openAdminPanel: () => set({ adminPanelOpen: true }),
+  closeAdminPanel: () => set({ adminPanelOpen: false }),
 }));

@@ -17,7 +17,7 @@ const STATUS_OPTIONS = [
 export default function Sidebar() {
   const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace } = useWorkspaceStore();
   const { user, logout, setUser } = useAuthStore();
-  const { toggleSidebar } = useUIStore();
+  const { toggleSidebar, openAdminPanel } = useUIStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -103,6 +103,17 @@ export default function Sidebar() {
         >
           +
         </button>
+
+        {/* 管理后台入口 */}
+        {currentWorkspace && (
+          <button
+            onClick={openAdminPanel}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/20 transition-colors"
+            title="管理后台"
+          >
+            ⚙️
+          </button>
+        )}
 
         {/* 底部用户头像 + 状态 */}
         <div className="mt-auto relative">

@@ -5,6 +5,7 @@ import MessageArea from '../message-area/MessageArea';
 import ThreadPanel from '../message-area/ThreadPanel';
 import SearchModal from '../search/SearchModal';
 import DocumentModal from '../document/DocumentModal';
+import AdminPanel from '../admin/AdminPanel';
 import { useUIStore } from '../../stores/uiStore';
 
 export default function AppLayout() {
@@ -56,6 +57,9 @@ export default function AppLayout() {
 
       {/* 文档弹窗 */}
       <DocumentModal />
+
+      {/* 管理后台 */}
+      <AdminPanel />
     </div>
   );
 }

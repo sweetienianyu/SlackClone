@@ -6,11 +6,17 @@ import { api } from '../../services/api';
 import { getSocket } from '../../lib/socket';
 import { formatTime } from '../../lib/utils';
 
-const TEMPLATES = [
-  { key: 'blank', label: '空白文档', icon: '📄' },
-  { key: 'meeting', label: '会议纪要', icon: '📝' },
-  { key: 'plan', label: '项目计划', icon: '📊' },
-  { key: 'retro', label: '回顾总结', icon: '🔄' },
+const FALLBACK_TEMPLATES = [
+  { key: 'blank', title: '空白文档', icon: '📄', description: '从零开始的空白文档', category: '基础' },
+  { key: 'meeting', title: '会议纪要', icon: '📝', description: '记录会议讨论、决议和待办事项', category: '会议' },
+  { key: 'plan', title: '项目计划', icon: '📊', description: '项目规划、里程碑和风险管理', category: '项目管理' },
+  { key: 'retro', title: '回顾总结', icon: '🔄', description: '团队迭代回顾与总结', category: '团队' },
+  { key: 'weekly', title: '周报', icon: '📅', description: '个人工作周报模板', category: '汇报' },
+  { key: 'requirement', title: '需求文档', icon: '📋', description: '产品需求文档（PRD）模板', category: '产品' },
+  { key: 'onboarding', title: '新人入职指南', icon: '👋', description: '新人入职流程与指引', category: '团队' },
+  { key: 'brainstorm', title: '头脑风暴', icon: '💡', description: '创意头脑风暴与想法评估', category: '团队' },
+  { key: 'api', title: 'API 设计文档', icon: '🔌', description: 'API 接口设计文档模板', category: '技术' },
+  { key: 'decision', title: '决策记录', icon: '⚖️', description: '架构决策记录（ADR）', category: '技术' },
 ];
 
 export default function DocumentModal() {
@@ -26,6 +32,10 @@ export default function DocumentModal() {
   const [loading, setLoading] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [templates, setTemplates] = useState<any[]>(FALLBACK_TEMPLATES);
+  const [templateCategories, setTemplateCategories] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>('全部');
+  const [previewTemplate, setPreviewTemplate] = useState<string | null>(null);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -51,6 +61,13 @@ export default function DocumentModal() {
       setView('list');
       loadDocs();
     }
+    // 加载模板列表
+    api.getDocumentTemplates().then((data) => {
+      setTemplates(data.templates);
+      setTemplateCategories(data.categories);
+    }).catch(() => {
+      setTemplates(FALLBACK_TEMPLATES);
+    });
   }, [documentModalOpen, documentId]);
 
   // ESC 关闭
@@ -249,15 +266,66 @@ export default function DocumentModal() {
 
               {/* 模板选择器 */}
               {showTemplatePicker && (
-                <div className="mb-4 grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg">
-                  {TEMPLATES.map((t) => (
-                    <button key={t.key} onClick={() => handleCreateDoc(t.key)} className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-lg hover:border-primary hover:shadow-sm transition-all text-left">
-                      <span className="text-2xl">{t.icon}</span>
-                      <div>
-                        <div className="text-sm font-medium text-gray-800">{t.label}</div>
-                      </div>
-                    </button>
-                  ))}
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">选择模板</h3>
+                    <button onClick={() => { setShowTemplatePicker(false); setPreviewTemplate(null); }} className="text-xs text-gray-400 hover:text-gray-600">取消</button>
+                  </div>
+
+                  {/* 分类筛选 */}
+                  {templateCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      <button
+                        onClick={() => setActiveCategory('全部')}
+                        className={`text-xs px-2 py-1 rounded ${activeCategory === '全部' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                      >
+                        全部
+                      </button>
+                      {templateCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setActiveCategory(cat)}
+                          className={`text-xs px-2 py-1 rounded ${activeCategory === cat ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {templates
+                      .filter((t) => activeCategory === '全部' || t.category === activeCategory)
+                      .map((t) => (
+                        <div
+                          key={t.key}
+                          className={`relative p-3 bg-white border rounded-lg hover:shadow-sm transition-all cursor-pointer ${
+                            previewTemplate === t.key ? 'border-primary shadow-sm' : 'border-gray-200 hover:border-primary'
+                          }`}
+                          onClick={() => setPreviewTemplate(t.key)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="text-2xl">{t.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800">{t.title}</div>
+                              <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{t.description}</div>
+                              <span className="inline-block mt-1 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{t.category}</span>
+                            </div>
+                          </div>
+                          {previewTemplate === t.key && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <pre className="text-[10px] text-gray-500 max-h-24 overflow-y-auto whitespace-pre-wrap font-mono">{t.preview}</pre>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleCreateDoc(t.key); }}
+                                className="mt-2 w-full text-xs py-1.5 bg-primary text-white rounded hover:opacity-90"
+                              >
+                                使用此模板
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
 

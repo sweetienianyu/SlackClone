@@ -63,6 +63,15 @@ export const api = {
   regenerateInviteCode: (id: string) =>
     request<{ inviteCode: string }>(`/workspaces/${id}/regenerate-invite`, { method: 'POST' }),
 
+  // Admin
+  getAdminStats: (id: string) => request<any>(`/workspaces/${id}/admin/stats`),
+  getAdminMembers: (id: string) => request<any[]>(`/workspaces/${id}/admin/members`),
+  updateMemberRole: (wsId: string, userId: string, role: string) =>
+    request<any>(`/workspaces/${wsId}/admin/members/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+  getAdminChannels: (id: string) => request<any[]>(`/workspaces/${id}/admin/channels`),
+  deleteAdminChannel: (wsId: string, channelId: string) =>
+    request<any>(`/workspaces/${wsId}/admin/channels/${channelId}`, { method: 'DELETE' }),
+
   // Channels
   getChannels: (workspaceId: string) =>
     request<any[]>(`/channels?workspace_id=${workspaceId}`),
@@ -124,6 +133,10 @@ export const api = {
     request<any>(`/documents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDocument: (id: string) =>
     request<any>(`/documents/${id}`, { method: 'DELETE' }),
+  getDocumentTemplates: () =>
+    request<{ templates: any[]; categories: string[] }>('/documents/templates/list'),
+  getDocumentTemplate: (key: string) =>
+    request<any>(`/documents/templates/${key}`),
 
   // Messages
   getMessages: (channelId: string, cursor?: string) =>
