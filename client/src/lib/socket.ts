@@ -182,3 +182,41 @@ export function emitThreadClose() {
 export function getSocket() {
   return socket;
 }
+
+// ============ Huddles 音视频通话 ============
+
+export function huddleStart(channelId: string) {
+  socket?.emit('huddle:start', { channelId });
+}
+
+export function huddleJoin(channelId: string) {
+  socket?.emit('huddle:join', { channelId });
+}
+
+export function huddleLeave(channelId: string) {
+  socket?.emit('huddle:leave', { channelId });
+}
+
+export function huddleEnd(channelId: string) {
+  socket?.emit('huddle:end', { channelId });
+}
+
+export function huddleOffer(channelId: string, targetUserId: string, offer: RTCSessionDescriptionInit) {
+  socket?.emit('huddle:offer', { channelId, targetUserId, offer });
+}
+
+export function huddleAnswer(channelId: string, targetUserId: string, answer: RTCSessionDescriptionInit) {
+  socket?.emit('huddle:answer', { channelId, targetUserId, answer });
+}
+
+export function huddleIceCandidate(channelId: string, targetUserId: string, candidate: RTCIceCandidateInit) {
+  socket?.emit('huddle:ice-candidate', { channelId, targetUserId, candidate });
+}
+
+export function huddleHand(channelId: string, raised: boolean) {
+  socket?.emit('huddle:hand', { channelId, raised });
+}
+
+export function huddleCheck(channelId: string) {
+  socket?.emit('huddle:check', { channelId });
+}

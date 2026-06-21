@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { api } from '../../services/api';
 import { emitTyping, emitThreadOpen } from '../../lib/socket';
 import { formatTime, getInitial } from '../../lib/utils';
+import HuddleEntry from '../huddle/HuddleEntry';
 import type { Message } from '../../types';
 
 const AVATAR_COLORS = ['#611f69', '#1264a3', '#0f7840', '#da2e38', '#ecb22e', '#e01e5a'];
@@ -404,6 +405,8 @@ export default function MessageArea() {
           )}
         </div>
         <div className="ml-auto flex items-center gap-1">
+          {/* Huddle 通话入口 */}
+          <HuddleEntry />
           {/* 成员按钮 */}
           <button
             onClick={() => { setShowMemberPanel(!showMemberPanel); setShowNotifPanel(false); }}
