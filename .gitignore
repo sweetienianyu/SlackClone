@@ -3,8 +3,11 @@ server/node_modules
 .env
 .env.test
 .env.development
-docs/*
+server/docs/*
 *.db
 *.db-journal
 *.pdf
 uploads/*
+**/dist/
+**/dist/**
+*.tsbuildinfo

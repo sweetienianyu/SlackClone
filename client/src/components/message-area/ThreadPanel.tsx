@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useChannelStore } from '../../stores/channelStore';
-import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import { formatTime, getInitial } from '../../lib/utils';
 import { emitThreadClose } from '../../lib/socket';
@@ -16,7 +15,6 @@ export default function ThreadPanel() {
     emitThreadClose();
   };
   const { messages } = useChannelStore();
-  const { user } = useAuthStore();
   const [replies, setReplies] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);

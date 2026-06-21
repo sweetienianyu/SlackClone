@@ -429,8 +429,8 @@ export default function MessageArea() {
             onClick={async () => {
               if (!currentChannel) return;
               try {
-                const detail = await api.getChannel(currentChannel.id);
-                // 打开频道详情 — 通过 CustomEvent 通知 ChannelList
+                await api.getChannel(currentChannel.id);
+              // 打开频道详情 — 通过 CustomEvent 通知 ChannelList
                 window.dispatchEvent(new CustomEvent('channel:open-detail', { detail: currentChannel }));
               } catch {}
             }}

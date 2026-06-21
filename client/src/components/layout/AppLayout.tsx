@@ -9,7 +9,7 @@ import AdminPanel from '../admin/AdminPanel';
 import { useUIStore } from '../../stores/uiStore';
 
 export default function AppLayout() {
-  const { sidebarCollapsed, toggleSidebar, threadPanelOpen, searchOpen, openSearch, closeSearch } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, searchOpen, openSearch, closeSearch } = useUIStore();
 
   // Cmd+K / Ctrl+K 快捷键
   useEffect(() => {

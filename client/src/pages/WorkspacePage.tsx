@@ -6,7 +6,7 @@ import { connectSocket } from '../lib/socket';
 import AppLayout from '../components/layout/AppLayout';
 
 export default function WorkspacePage() {
-  const { workspaces, currentWorkspace, setWorkspaces, setCurrentWorkspace, addWorkspace } = useWorkspaceStore();
+  const { currentWorkspace, setWorkspaces, setCurrentWorkspace, addWorkspace } = useWorkspaceStore();
   const { user, logout } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');

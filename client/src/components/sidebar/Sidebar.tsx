@@ -17,7 +17,7 @@ const STATUS_OPTIONS = [
 export default function Sidebar() {
   const { workspaces, currentWorkspace, setCurrentWorkspace, addWorkspace } = useWorkspaceStore();
   const { user, logout, setUser } = useAuthStore();
-  const { toggleSidebar, openAdminPanel } = useUIStore();
+  const { openAdminPanel } = useUIStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);

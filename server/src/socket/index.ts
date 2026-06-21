@@ -15,8 +15,11 @@ interface ActiveCall {
 const activeCalls = new Map<string, ActiveCall>(); // channelId -> ActiveCall
 
 export function setupSocketIO(httpServer: any) {
+  const CORS_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').filter(Boolean)
+    : ['http://localhost:5173', 'http://localhost:5174'];
   const io = new Server(httpServer, {
-    cors: { origin: ['http://localhost:5173', 'http://localhost:5174'], credentials: true },
+    cors: { origin: CORS_ORIGINS.length > 0 ? CORS_ORIGINS : true, credentials: true },
   });
 
   // 认证中间件
